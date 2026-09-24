@@ -6,11 +6,11 @@ function SlimeMoldPage() {
   return (
     <>
       <>
-        <div id="header">
-          <h1>Slime Mold</h1>
+        <div id="Controls">
+          <h1 style={{ color: 'white'}}>Slime Mold</h1>
+          <Link to="/">Home</Link><br />
         </div>
         <div>
-          <Link to="/">Home</Link><br />
           <SlimeMold />
         </div>
       </>

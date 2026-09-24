@@ -1,5 +1,11 @@
-#header {
+#Controls {
     display: flex;
-    align-content: center;
-    justify-content: center;
+    position: fixed;
+    background-color: black;
+    border-radius: 20px;
+    top: 0;
+    left: 0;
+    flex-direction: column;
+    padding: 16px;
+    gap: 8px;
 }

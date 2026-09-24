@@ -2,6 +2,8 @@ import { useEffect } from "react";
 import { useRef } from "react";
 import { initSlimeMold } from "./main";
 
+import "./style.css";
+
 function SlimeMold() {
   const containerRef = useRef(null);
 
@@ -23,7 +25,7 @@ function SlimeMold() {
     }
   }, [])
 
-  return <div ref={containerRef} />
+  return <div className="sim-background" ref={containerRef} />
 }
 
 export default SlimeMold;

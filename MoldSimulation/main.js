@@ -2,11 +2,11 @@ import * as THREE from 'three';
 
 import splatMatFragSrc from './splatmat.frag.glsl?raw'
 import { atomicAdd, atomicLoad, atomicStore, float, Fn, instancedArray, instanceIndex, radians, texture, textureStore, uint, uvec2, vec4, vec2, cos, sin, atan, If, uniform, hash, round } from 'three/tsl';
-import { MeshBasicNodeMaterial, StorageTexture, WebGPURenderer } from 'three/webgpu';
+import { MeshBasicNodeMaterial, StorageTexture, Vector2, WebGPURenderer } from 'three/webgpu';
 
 // -------------- TUNABLES -----------------------------
-const WIDTH = 1280;
-const HEIGHT = 720;
+let WIDTH = 1280;
+let HEIGHT = 720;
 const STEP_SIZE = 1;
 const TURN_RAD = 45;
 const DECAY_RATE = 0.1;
@@ -36,6 +36,8 @@ export async function initSlimeMold(container) {
   await renderer.init();
 
 
+  WIDTH = window.innerWidth;
+  HEIGHT = window.innerHeight;
 
   renderer.setSize(WIDTH, HEIGHT);
   container.appendChild(renderer.domElement);
