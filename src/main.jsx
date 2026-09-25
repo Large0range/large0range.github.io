@@ -4,12 +4,14 @@ import './index.css'
 import App from './App.jsx'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import SlimeMoldPage from '../MoldSimulation/SlimeMold.jsx'
+import FallingSand from '../FallingSand/FallingSandLinker.jsx'
 
 createRoot(document.getElementById('root')).render(
   <HashRouter>
     <Routes>
       <Route path="/" element={<App />} />
       <Route path="/slime-mold" element={<SlimeMoldPage />} />
+      <Route path="/falling-sand" element={<FallingSand />} />
     </Routes>
   </HashRouter>
 )

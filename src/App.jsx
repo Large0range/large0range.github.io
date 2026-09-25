@@ -11,6 +11,7 @@ function App() {
       </div>
       <div>
         <Link to="/slime-mold">Mold</Link><br />
+        <Link to="/falling-sand">Falling Sand</Link><br />
         <span>Currently working on adding my simulations into the website here</span>
       </div>
     </>
