@@ -1,9 +1,8 @@
-import { color, Fn, If, instanceIndex, texture, textureLoad, textureStore, uint, uniform, uvec2, vec2, vec4 } from "three/tsl";
+import { color, Fn, If, instanceIndex, instancedArray, texture, textureLoad, textureStore, uint, uniform, uvec2, vec2, vec4, bool, Loop } from "three/tsl";
 import { Camera, Mesh, MeshBasicNodeMaterial, OrthographicCamera, PlaneGeometry, Scene, StorageTexture, Vector2, WebGPURenderer } from "three/webgpu";
 
 const WIDTH = 800;
 const HEIGHT = 600;
-const BLOCK_SIZE = 10;
 
 export async function initFallingSand(container) {
   if (!navigator.gpu) {
@@ -30,68 +29,70 @@ export async function initFallingSand(container) {
 
 
   //-------- SETUP SIMULATION -----------
-  const textureA = new StorageTexture(WIDTH, HEIGHT); // CHANGE TO BE / BLOCK_SIZE
-  const textureB = new StorageTexture(WIDTH, HEIGHT); // CHANGE TO BE / BLOCK_SIZE
+  const displayTexture = new StorageTexture(WIDTH, HEIGHT);
+
+  const sandParticles = instancedArray(WIDTH * HEIGHT, 'vec4');
+  const sandCount = uniform(0, 'uint');
 
   const mousePos = uniform(new Vector2(0,0), 'vec2');
   const mouseDown = uniform(false, 'bool');
 
-  const initBNode = Fn(() => {
-    const posX = instanceIndex.mod(WIDTH);
-    const posY = instanceIndex.div(WIDTH);
-
-    textureStore(textureB, uvec2(posX, posY), vec4(1, 1, 1, 1)).toWriteOnly();
-  })().compute(WIDTH * HEIGHT);
-
-  const testANode = Fn(() => {
-    const posX = instanceIndex.mod(WIDTH);
-    const posY = instanceIndex.div(WIDTH);
-
-    const col = textureLoad(textureB, uvec2(posX, posY)).toVar();
-
-    textureStore(textureA, uvec2(posX, posY), col);
-
-    If(mouseDown.and(mousePos.div(BLOCK_SIZE).floor().equal(vec2(posX.toFloat(), posY.toFloat()).div(BLOCK_SIZE).floor()).all()), () => {
-      textureStore(textureA, uvec2(posX, posY), vec4(1, 0, 0, 1)).toWriteOnly();
-    })
-
-
-
-    If(posX.mod(BLOCK_SIZE).equal(0), () => {
-      textureStore(textureA, uvec2(posX, posY), vec4(0, 0, 0, 1)).toWriteOnly();
-    })
-
-
-    If(posY.mod(BLOCK_SIZE).equal(0), () => {
-      textureStore(textureA, uvec2(posX, posY), vec4(0,0,0, 1)).toWriteOnly();
-    })
-
-  })().compute(WIDTH * HEIGHT);
-
-
-
-  const testBNode = Fn(() => {
+  const displayClear = Fn(() => {
     const posX = instanceIndex.mod(WIDTH);
     const posY = instanceIndex.div(WIDTH);
 
 
-    const col = textureLoad(textureA, uvec2(posX, posY)).toVar();
+    textureStore(displayTexture, uvec2(posX, posY), vec4(0.9, 0.9, 0.9, 1)).toWriteOnly();
+  })().compute(WIDTH * HEIGHT);
 
-    textureStore(textureB, uvec2(posX, posY), col);
+  const updateSand = Fn(() => {
+    If(instanceIndex.lessThan(sandCount), () => {
+      const currentX = sandParticles.element(instanceIndex).x;
+      const currentY = sandParticles.element(instanceIndex).y;
+      const belowParticle = bool(false).toVar();
+      const leftParticle = bool(false).toVar();
+      const rightParticle = bool(false).toVar();
+      Loop(sandCount, ({ i }) => {
+        const loopParticle = sandParticles.element(i);
+        If(loopParticle.y.equal(currentY.sub(1)).and(loopParticle.x.equal(currentX)), () => {
+          belowParticle.assign(true);
+        }).ElseIf(loopParticle.y.equal(currentY.sub(1)).and(loopParticle.x.equal(currentX.sub(1))), () => {
+          leftParticle.assign(true);
+        }).ElseIf(loopParticle.y.equal(currentY.sub(1)).and(loopParticle.x.equal(currentX.add(1))), () => {
+          rightParticle.assign(true);
+        })
+      })
 
-    If(mouseDown.and(mousePos.div(BLOCK_SIZE).floor().equal(vec2(posX.toFloat(), posY.toFloat()).div(BLOCK_SIZE).floor()).all()), () => {
-      textureStore(textureB, uvec2(posX, posY), vec4(1, 0, 0, 1)).toWriteOnly();
+      If(currentY.notEqual(0), () => {
+        If(belowParticle.not(), () => {
+          sandParticles.element(instanceIndex).addAssign(vec4(0, -1, 0, 1));
+        }).ElseIf(leftParticle.not(), () => {
+          sandParticles.element(instanceIndex).addAssign(vec4(-1, -1, 0, 1));
+        }).ElseIf(rightParticle.not(), () => {
+          sandParticles.element(instanceIndex).addAssign(vec4(1, -1, 0, 1));
+        })
+      })
+    })
+  })().compute(WIDTH * HEIGHT);
+
+  const displaySand = Fn(() => {
+    If(instanceIndex.lessThan(sandCount), () => {
+      const sx = sandParticles.element(instanceIndex).x;
+      const sy = sandParticles.element(instanceIndex).y;
+      textureStore(displayTexture, uvec2(sx, sy), vec4(1,0,0,1)).toWriteOnly();
     })
 
-    If(posX.mod(BLOCK_SIZE).equal(0), () => {
-      textureStore(textureB, uvec2(posX, posY), vec4(0,0,0, 1)).toWriteOnly();
-    })
-
-    If(posY.mod(BLOCK_SIZE).equal(0), () => {
-      textureStore(textureB, uvec2(posX, posY), vec4(0,0,0, 1)).toWriteOnly();
-    })
 
   })().compute(WIDTH * HEIGHT);
+
+
+  const addNext = Fn(() => {
+    sandParticles.element(sandCount).assign(vec4(mousePos, 0, 0));
+    sandParticles.element(sandCount.add(1)).assign(vec4(mousePos.x.sub(1), mousePos.y, 0, 0));
+    sandParticles.element(sandCount.add(2)).assign(vec4(mousePos.x.sub(1), mousePos.y.sub(1), 0, 0));
+    sandParticles.element(sandCount.add(3)).assign(vec4(mousePos.x, mousePos.y.sub(1), 0, 0));
+  })().compute(1);
+
 
   //-------- SETUP SCENE ----------------
 
@@ -100,40 +101,55 @@ export async function initFallingSand(container) {
 
   const plane = new PlaneGeometry(2, 2);
   const material = new MeshBasicNodeMaterial();
-  const outputTextureNode = texture(textureA);
+  const outputTextureNode = texture(displayTexture);
   material.colorNode = outputTextureNode;
   const mesh = new Mesh(plane, material);
   scene.add(mesh);
   mesh.frustumCulled = false;
 
-  renderer.compute(initBNode);
+  //clear the display texture
+  renderer.compute(displayClear);
 
 
 
   const down = (event) => {
     mouseDown.value = true;
+  }
+  const up = (event) => {
+    mouseDown.value = false;
+  }
+  const move = (event) => {
     mousePos.value.set(event.offsetX, HEIGHT - event.offsetY);
   }
+  renderer.domElement.addEventListener("mousemove", move)
   renderer.domElement.addEventListener("mousedown", down);
+  renderer.domElement.addEventListener("mouseup", up)
 
 
   let swapflag = true;
   renderer.setAnimationLoop((now) => {
-    outputTextureNode.value = swapflag ? textureA : textureB;
-    renderer.compute(swapflag ? testANode : testBNode);
+    if (mouseDown.value) {
+      renderer.compute(addNext);
+      sandCount.value += 4;
+    }
+
+    renderer.compute(displayClear);
+    renderer.compute(updateSand);
+    renderer.compute(displaySand);
     renderer.render(scene, camera)
 
     swapflag = !swapflag;
   });
 
   return () => {
-    textureA.dispose();
-    textureB.dispose();
+    displayTexture.dispose();
 
     renderer.setAnimationLoop(null);
     renderer.dispose();
 
     renderer.domElement.removeEventListener("mousedown", down);
+    renderer.domElement.removeEventListener("mouseup", up);
+    renderer.domElement.removeEventListener("mousemove", move);
 
     container.removeChild(renderer.domElement);
   }
