@@ -8,11 +8,12 @@ function App() {
     <>
       <div id="header">
         <h1>Simulation Site</h1>
+        <span>This site is purely just for my coding projects that I want a place to host and access all in one place</span>
       </div>
-      <div>
-        <Link to="/slime-mold">Mold</Link><br />
-        <Link to="/falling-sand">Falling Sand</Link><br />
-        <span>Currently working on adding my simulations into the website here</span>
+
+      <div id="simulation-grid">
+        <Link to="/slime-mold">Mold</Link>
+        <Link to="/falling-sand">Falling Sand</Link>
       </div>
     </>
   )
