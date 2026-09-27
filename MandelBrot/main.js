@@ -36,7 +36,7 @@ export async function initMandelBrot(container) {
     const z = vec2(0, 0).toVar();
     let iter = float(0).toVar();
 
-    Loop(200, ({ i }) => {
+    Loop(500, ({ i }) => {
       const x = z.x.mul(z.x).sub(z.y.mul(z.y));
       const y = z.x.mul(z.y).mul(2.0);
       z.assign(vec2(x, y).add(c));
@@ -47,7 +47,7 @@ export async function initMandelBrot(container) {
       });
     });
 
-    let finalColor = vec4(vec3(iter.div(200)), 1).toVar();
+    let finalColor = vec4(vec3(iter.div(500)), 1).toVar();
     return finalColor;
   })();
 
@@ -101,7 +101,9 @@ export async function initMandelBrot(container) {
   return () => {
     renderer.setAnimationLoop(null);
 
+    plane.dispose();
+    material.dispose();
+    scene.remove(mesh);
     renderer.dispose();
-    renderer.forceContextLoss();
   }
 }
