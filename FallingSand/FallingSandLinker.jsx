@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useRef } from "react";
 import { initFallingSand } from "./main";
 
+import "./style.css";
 
 function FallingSand() {
   const containerRef = useRef(null);

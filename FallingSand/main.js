@@ -1,17 +1,10 @@
 import { color, Fn, If, instanceIndex, instancedArray, texture, textureLoad, textureStore, uint, uniform, uvec2, vec2, vec4, bool, Loop, atomicAdd, atomicSub, atomicStore } from "three/tsl";
 import { Camera, Mesh, MeshBasicNodeMaterial, OrthographicCamera, PlaneGeometry, Scene, StorageTexture, Vector2, WebGPURenderer } from "three/webgpu";
 
-const WIDTH = 800;
-const HEIGHT = 600;
-const MAX_PARTICLES = WIDTH * HEIGHT;
+let WIDTH = 800;
+let HEIGHT = 600;
 const PARTICLES_PER_CLICK = 64;
 const REMOVE_RADIUS = 6;
-
-const TIERS = [1024, 4096, 16384, 65536, 262144, MAX_PARTICLES];
-function pickTier(n) {
-  for (const t of TIERS) if (n <= t) return t;
-  return MAX_PARTICLES;
-}
 
 export async function initFallingSand(container) {
   if (!navigator.gpu) {
@@ -27,6 +20,16 @@ export async function initFallingSand(container) {
     }
   }
 
+  WIDTH = window.innerWidth;
+  HEIGHT = window.innerHeight;
+  const MAX_PARTICLES = WIDTH * HEIGHT;
+
+  const TIERS = [1024, 4096, 16384, 65536, 262144, MAX_PARTICLES];
+  function pickTier(n) {
+    for (const t of TIERS) if (n <= t) return t;
+    return MAX_PARTICLES;
+  }
+
   const renderer = new WebGPURenderer();
   await renderer.init();
   renderer.setSize(WIDTH, HEIGHT);
@@ -34,6 +37,7 @@ export async function initFallingSand(container) {
   container.appendChild(renderer.domElement);
 
   //-------- SETUP SIMULATION -----------
+
   const displayTexture = new StorageTexture(WIDTH, HEIGHT);
 
   let addSide = Math.sqrt(PARTICLES_PER_CLICK);
@@ -66,7 +70,7 @@ export async function initFallingSand(container) {
         If(buf.element(instanceIndex).w.equal(1), () => {
           const sx = buf.element(instanceIndex).x;
           const sy = buf.element(instanceIndex).y;
-          textureStore(displayTexture, uvec2(sx, sy), vec4(0.9, 0.9, 0.9, 1)).toWriteOnly();
+          textureStore(displayTexture, uvec2(sx, sy), vec4(0.9, 0.9, 0.9, 1.0)).toWriteOnly();
         });
       });
     });
