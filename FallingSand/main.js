@@ -1,10 +1,17 @@
-import { color, Fn, If, instanceIndex, instancedArray, texture, textureLoad, textureStore, uint, uniform, uvec2, vec2, vec4, bool, Loop, atomicAdd, atomicSub, atomicStore } from "three/tsl";
+import { color, Fn, If, instanceIndex, instancedArray, texture, textureLoad, textureStore, uint, uniform, uvec2, vec2, vec4, bool, Loop, atomicAdd, atomicSub, atomicStore, float } from "three/tsl";
 import { Camera, Mesh, MeshBasicNodeMaterial, OrthographicCamera, PlaneGeometry, Scene, StorageTexture, Vector2, WebGPURenderer } from "three/webgpu";
 
-let WIDTH = 800;
-let HEIGHT = 600;
-const PARTICLES_PER_CLICK = 64;
+
+const PARTICLES_PER_CLICK = 200;
 const REMOVE_RADIUS = 6;
+
+
+
+// cheap 2D hash -> pseudo-random 0..1, used to give each spawned particle
+// a stable per-particle hue jitter based on its spawn position
+function hash21(x, y) {
+  return x.mul(12.9898).add(y.mul(78.233)).sin().mul(43758.5453).fract();
+}
 
 export async function initFallingSand(container) {
   if (!navigator.gpu) {
@@ -20,8 +27,9 @@ export async function initFallingSand(container) {
     }
   }
 
-  WIDTH = window.innerWidth;
-  HEIGHT = window.innerHeight;
+
+  const WIDTH = window.innerWidth;
+  const HEIGHT = window.innerHeight;
   const MAX_PARTICLES = WIDTH * HEIGHT;
 
   const TIERS = [1024, 4096, 16384, 65536, 262144, MAX_PARTICLES];
@@ -30,6 +38,7 @@ export async function initFallingSand(container) {
     return MAX_PARTICLES;
   }
 
+
   const renderer = new WebGPURenderer();
   await renderer.init();
   renderer.setSize(WIDTH, HEIGHT);
@@ -37,13 +46,15 @@ export async function initFallingSand(container) {
   container.appendChild(renderer.domElement);
 
   //-------- SETUP SIMULATION -----------
+  //WIDTH = window.innerWidth;
+  //HEIGHT = window.innerHeight;
 
   const displayTexture = new StorageTexture(WIDTH, HEIGHT);
 
   let addSide = Math.sqrt(PARTICLES_PER_CLICK);
   let hAddSide = addSide / 2;
 
-  // vec4 layout: (x, y, unused, alive) — alive: 1 = live particle, 0 = dead/empty slot
+  // vec4 layout: (x, y, hue jitter 0..1, alive) — alive: 1 = live, 0 = dead/empty
   const sandParticlesA = instancedArray(MAX_PARTICLES, 'vec4');
   const sandParticlesB = instancedArray(MAX_PARTICLES, 'vec4');
 
@@ -57,7 +68,7 @@ export async function initFallingSand(container) {
   const fullClear = Fn(() => {
     const posX = instanceIndex.mod(WIDTH);
     const posY = instanceIndex.div(WIDTH);
-    textureStore(displayTexture, uvec2(posX, posY), vec4(0.9, 0.9, 0.9, 1)).toWriteOnly();
+    textureStore(displayTexture, uvec2(posX, posY), vec4(0,0,0, 1)).toWriteOnly();
   })().compute(WIDTH * HEIGHT);
 
   const occupancyInit = Fn(() => {
@@ -70,20 +81,21 @@ export async function initFallingSand(container) {
         If(buf.element(instanceIndex).w.equal(1), () => {
           const sx = buf.element(instanceIndex).x;
           const sy = buf.element(instanceIndex).y;
-          textureStore(displayTexture, uvec2(sx, sy), vec4(0.9, 0.9, 0.9, 1.0)).toWriteOnly();
+          textureStore(displayTexture, uvec2(sx, sy), vec4(0,0,0, 1)).toWriteOnly();
         });
       });
     });
   }
 
-  // atomic-ticket claim for movement, same pattern as before, now gated
-  // behind an alive check so dead/empty slots are skipped entirely
+  // atomic-ticket claim for movement — unchanged except `z` (hue jitter) is
+  // now carried over to dst instead of being reset to 0 on every move
   function updateSandKernel(src, dst) {
     return Fn(() => {
       If(instanceIndex.lessThan(sandCount), () => {
         If(src.element(instanceIndex).w.equal(1), () => {
           const currentX = src.element(instanceIndex).x;
           const currentY = src.element(instanceIndex).y;
+          const currentZ = src.element(instanceIndex).z;
 
           const destX = currentX.toVar();
           const destY = currentY.toVar();
@@ -129,30 +141,37 @@ export async function initFallingSand(container) {
             });
           });
 
-          dst.element(instanceIndex).assign(vec4(destX, destY, 0, 1));
+          // z (hue jitter) carried over unchanged — was previously hardcoded
+          // to 0 here, which wiped out spawn-time hue on a particle's first move
+          dst.element(instanceIndex).assign(vec4(destX, destY, currentZ, 1));
         }).Else(() => {
-          // stays dead — carry the empty slot forward unchanged
           dst.element(instanceIndex).assign(vec4(0, 0, 0, 0));
         });
       });
     });
   }
 
+  // color now varies per-particle using the hue jitter stored in `z`,
+  // instead of a flat vec4(1, 0, 0, 1) for every particle
   function displaySandKernel(buf) {
     return Fn(() => {
       If(instanceIndex.lessThan(sandCount), () => {
         If(buf.element(instanceIndex).w.equal(1), () => {
           const sx = buf.element(instanceIndex).x;
           const sy = buf.element(instanceIndex).y;
-          textureStore(displayTexture, uvec2(sx, sy), vec4(1, 0, 0, 1)).toWriteOnly();
+          const z = buf.element(instanceIndex).z;
+
+          // warm sandy palette, jittered per-particle by z (0..1)
+          const r = float(0.80).add(z.mul(0.18));
+          const g = float(0.55).add(z.mul(0.28));
+          const b = float(0.25).add(z.mul(0.18));
+
+          textureStore(displayTexture, uvec2(sx, sy), vec4(r, g, b, 1)).toWriteOnly();
         });
       });
     });
   }
 
-  // NEW: left-click removal. Marks matching live particles dead and frees
-  // their occupancy cell. Pure per-instance read/write on its own slot plus
-  // an atomic release of its own cell — no cross-instance aliasing.
   function removeSandKernel(buf) {
     return Fn(() => {
       If(instanceIndex.lessThan(sandCount), () => {
@@ -189,12 +208,8 @@ export async function initFallingSand(container) {
   const removeSandA = buildTiers(removeSandKernel(sandParticlesA));
   const removeSandB = buildTiers(removeSandKernel(sandParticlesB));
 
-  // FIXED: spawn now uses the same atomic-ticket claim as movement — a slot
-  // only becomes a real particle if it wins the atomicAdd on its cell (old
-  // value 0). If the cell is already occupied, the attempt is undone with
-  // atomicSub and that slot is written as a dead stub instead of silently
-  // corrupting occupancy (which was the source of the floating-particle bug).
-  // Bounds-checked so a click near the canvas edge can't index outside the grid.
+  // spawn now writes hash21(px, py) into z instead of a fixed 0, giving
+  // each particle in the block a stable, distinct hue based on where it landed
   function makeAddNext(buf) {
     return Fn(() => {
       Loop({ start: -hAddSide, end: hAddSide }, { start: -hAddSide, end: hAddSide }, ({ i, j }) => {
@@ -209,7 +224,7 @@ export async function initFallingSand(container) {
           const idx = uint(py.mul(WIDTH).add(px));
           const oldVal = atomicAdd(occupancy.element(idx), uint(1));
           If(oldVal.equal(uint(0)), () => {
-            buf.element(sandCount.add(slot)).assign(vec4(px, py, 0, 1));
+            buf.element(sandCount.add(slot)).assign(vec4(px, py, hash21(px, py), 1));
           }).Else(() => {
             atomicSub(occupancy.element(idx), uint(1));
             buf.element(sandCount.add(slot)).assign(vec4(0, 0, 0, 0));
