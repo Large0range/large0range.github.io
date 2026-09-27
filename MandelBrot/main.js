@@ -15,11 +15,19 @@ export async function initMandelBrot(container) {
 
   // ----------- SETUP SIMULATION ------------------
   const mandelbrot = Fn(() => {
-    const centerReal = -0.5;
-    const centerImag = 0.0;
-    const viewHeight = 2.5;
+    const centerReal = -0.743643887037151;
+    const centerImag = 0.13182590420533;
+
+    const cycleLength = 40.0; // tune to just before visual breakdown
+    const t = time.mod(cycleLength);
+
+    // zoom grows exponentially with time — halves the view every ~2 seconds
+    const zoomSpeed = 0.35;
+
+    const viewHeight = float(2.5).mul(t.mul(-zoomSpeed).exp());
+
     const aspect = float(WIDTH).div(HEIGHT);
-    const viewWidth = float(viewHeight).mul(aspect);
+    const viewWidth = viewHeight.mul(aspect);
 
     const cReal = float(centerReal).add(screenUV.x.sub(0.5).mul(viewWidth));
     const cImag = float(centerImag).add(screenUV.y.sub(0.5).mul(viewHeight));
@@ -28,25 +36,18 @@ export async function initMandelBrot(container) {
     const z = vec2(0, 0).toVar();
     let iter = float(0).toVar();
 
+    Loop(200, ({ i }) => {
+      const x = z.x.mul(z.x).sub(z.y.mul(z.y));
+      const y = z.x.mul(z.y).mul(2.0);
+      z.assign(vec2(x, y).add(c));
 
-    Loop(100, ({ i }) => {
-      const x = z.x.mul( z.x ).sub( z.y.mul( z.y ) );
-      const y = z.x.mul( z.y ).mul( 2.0 );
-      z.assign( vec2( x, y ).add( c ) );
+      If(z.length().greaterThan(2.0), () => {
+        iter.assign(i.toFloat());
+        Break();
+      });
+    });
 
-      // Break early if the point escapes the threshold
-		  If( z.length().greaterThan( 2.0 ), () => {
-  			iter.assign( i.toFloat() );
-  			Break();
-			})
-    })
-
-    // Mix the two colors based on the X coordinate of the UV map and the time oscillator
-    let finalColor = vec4(vec3(iter.div(100)), 1).toVar();// colorA.mix(colorB, iter.div(100));
-    //If(broke, () => {
-    //  finalColor.assign(color('red'));
-    //})
-
+    let finalColor = vec4(vec3(iter.div(200)), 1).toVar();
     return finalColor;
   })();
 
