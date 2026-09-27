@@ -293,6 +293,9 @@ export async function initFallingSand(container) {
   });
 
   return () => {
+    plane.dispose();
+    material.dispose();
+    scene.remove(mesh);
     displayTexture.dispose();
     renderer.setAnimationLoop(null);
     renderer.dispose();
