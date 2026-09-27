@@ -14,6 +14,7 @@ function App() {
       <div id="simulation-grid">
         <Link to="/slime-mold">Mold</Link>
         <Link to="/falling-sand">Falling Sand</Link>
+        <Link to="/mandelbrot-set">MandelBrot Set</Link>
       </div>
     </>
   )

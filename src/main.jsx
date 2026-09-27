@@ -4,6 +4,7 @@ import App from './App.jsx'
 import { HashRouter, Route, Routes } from 'react-router-dom'
 import SlimeMoldPage from '../MoldSimulation/SlimeMold.jsx'
 import FallingSandPage from '../FallingSand/FallingSand.jsx'
+import MandelBrot from '../MandelBrot/MandelBrotLinker.jsx'
 
 createRoot(document.getElementById('root')).render(
   <HashRouter>
@@ -11,6 +12,7 @@ createRoot(document.getElementById('root')).render(
       <Route path="/" element={<App />} />
       <Route path="/slime-mold" element={<SlimeMoldPage />} />
       <Route path="/falling-sand" element={<FallingSandPage />} />
+      <Route path="/mandelbrot-set" element={<MandelBrot />} />
     </Routes>
   </HashRouter>
 )
